@@ -144,7 +144,7 @@ class TestDashboardViews(unittest.TestCase):
     # ---- navigation ---------------------------------------------------
     def test_sidebar_navigation_switches_views(self):
         at = run_app("overview")
-        self.assertEqual(len([b for b in at.sidebar.button if str(b.key).startswith("nav-")]), 7)
+        self.assertEqual(len([b for b in at.sidebar.button if str(b.key).startswith("nav-")]), 8)
         for view, title in VIEWS.items():
             with self.subTest(view=view):
                 at.sidebar.button(key=f"nav-{view}").click().run()
@@ -372,7 +372,7 @@ class TestDashboardViews(unittest.TestCase):
             at = run_app("overview")
         self.assertEqual(len(at.exception), 0)
         self.assertIn("This view is unavailable", page_text(at))
-        self.assertEqual(len([b for b in at.sidebar.button if str(b.key).startswith("nav-")]), 7)  # navigation still works
+        self.assertEqual(len([b for b in at.sidebar.button if str(b.key).startswith("nav-")]), 8)  # navigation still works
 
 
 class TestBackendAdapter(unittest.TestCase):

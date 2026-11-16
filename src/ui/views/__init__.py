@@ -14,12 +14,14 @@ VIEWS: list[tuple[str, str, str]] = [
     ("patient_risk", "Patient Risk", ":material/stethoscope:"),
     ("twin", "Hospital Twin", ":material/hub:"),
     ("whatif", "What-If", ":material/tune:"),
+    ("assistant", "AI Assistant", ":material/smart_toy:"),
 ]
 # Sidebar sections: group label -> view ids (every view appears exactly once).
 NAV_GROUPS: list[tuple[str, list[str]]] = [
     ("Today", ["overview", "alerts", "analytics"]),
     ("Look ahead", ["predictions", "patient_risk"]),
     ("Plan", ["twin", "whatif"]),
+    ("Ask", ["assistant"]),
 ]
 # One-line description of each page, shown as the tooltip on its navigation icon.
 VIEW_HINTS: dict[str, str] = {
@@ -30,6 +32,7 @@ VIEW_HINTS: dict[str, str] = {
     "patient_risk": "Risk group for a synthetic patient record",
     "twin": "Today beside the expected state",
     "whatif": "Try a scenario before deciding",
+    "assistant": "Ask questions about the hospital and the models",
 }
 VIEW_IDS = [v[0] for v in VIEWS]
 DEFAULT_VIEW = "overview"

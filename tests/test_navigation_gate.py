@@ -98,7 +98,7 @@ class TestRouteProtection(unittest.TestCase):
             with self.subTest(view=view):
                 at = app(view, {auth.SESSION_KEY: auth.DEMO_USER})
                 self.assertEqual(at.session_state["view"], view)
-                self.assertEqual(len(nav_buttons(at)), 7)
+                self.assertEqual(len(nav_buttons(at)), 8)
 
     def test_sign_in_from_a_deep_link_lands_on_the_requested_view(self):
         at = app("twin")
@@ -208,13 +208,13 @@ class TestSignInPage(unittest.TestCase):
 
 
 class TestNavigationStructure(unittest.TestCase):
-    def test_seven_views_in_three_groups_with_plain_labels(self):
-        self.assertEqual([g for g, _ in NAV_GROUPS], ["Today", "Look ahead", "Plan"])
+    def test_eight_views_in_four_groups_with_plain_labels(self):
+        self.assertEqual([g for g, _ in NAV_GROUPS], ["Today", "Look ahead", "Plan", "Ask"])
         self.assertEqual(dict(NAV_GROUPS)["Today"], ["overview", "alerts", "analytics"])
         self.assertEqual(dict(NAV_GROUPS)["Look ahead"], ["predictions", "patient_risk"])
         self.assertEqual(dict(NAV_GROUPS)["Plan"], ["twin", "whatif"])
         labels = [label for _id, label, _icon in VIEWS]
-        self.assertEqual(sorted(labels), sorted(["Overview", "Alerts", "Trends", "Forecasts", "Patient Risk", "Hospital Twin", "What-If"]))
+        self.assertEqual(sorted(labels), sorted(["Overview", "Alerts", "Trends", "Forecasts", "Patient Risk", "Hospital Twin", "What-If", "AI Assistant"]))
 
 
 if __name__ == "__main__":

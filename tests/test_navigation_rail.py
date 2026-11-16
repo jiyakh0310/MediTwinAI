@@ -43,15 +43,15 @@ class TestRailStructure(unittest.TestCase):
     def setUpClass(cls):
         cls.at = workspace("twin")
 
-    def test_seven_navigation_buttons_in_the_three_groups(self):
+    def test_eight_navigation_buttons_in_the_four_groups(self):
         keys = [b.key for b in self.at.sidebar.button if str(b.key).startswith("nav-")]
         expected = [f"nav-{v}" for _g, ids in NAV_GROUPS for v in ids]
         self.assertEqual(keys, expected)
-        self.assertEqual(len(keys), 7)
+        self.assertEqual(len(keys), 8)
 
     def test_group_headings_and_brand_are_in_the_rail(self):
         html = " ".join(m.value for m in self.at.sidebar.markdown)
-        for group in ("Today", "Look ahead", "Plan"):
+        for group in ("Today", "Look ahead", "Plan", "Ask"):
             self.assertIn(f'<span class="t">{group}</span>', html)
         self.assertIn("mt-rail-brand", html)
         self.assertIn("Synthetic data", html)  # the small status indicator
@@ -79,7 +79,7 @@ class TestRailStructure(unittest.TestCase):
 
     def test_icons_are_a_consistent_set(self):
         icons = [icon for _i, _l, icon in VIEWS]
-        self.assertEqual(len(set(icons)), 7)
+        self.assertEqual(len(set(icons)), 8)
         self.assertTrue(all(i.startswith(":material/") for i in icons))
 
     def test_user_block_and_sign_out(self):
@@ -117,7 +117,7 @@ class TestRailPinning(unittest.TestCase):
         for view in VIEW_IDS:
             with self.subTest(view=view):
                 at = workspace(view)
-                self.assertEqual(len([b for b in at.sidebar.button if str(b.key).startswith("nav-")]), 7)
+                self.assertEqual(len([b for b in at.sidebar.button if str(b.key).startswith("nav-")]), 8)
                 self.assertEqual(len(at.exception), 0)
 
 

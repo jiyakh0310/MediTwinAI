@@ -78,10 +78,10 @@ class TestNavigation(unittest.TestCase):
         grouped = [v for _g, ids in NAV_GROUPS for v in ids]
         self.assertEqual(sorted(grouped), sorted(VIEW_IDS))
         self.assertEqual(len(grouped), len(set(grouped)))
-        self.assertEqual(len(VIEWS), 7)
+        self.assertEqual(len(VIEWS), 8)
 
     def test_group_labels(self):
-        self.assertEqual([g for g, _ in NAV_GROUPS], ["Today", "Look ahead", "Plan"])
+        self.assertEqual([g for g, _ in NAV_GROUPS], ["Today", "Look ahead", "Plan", "Ask"])
 
 
 class TestGlossary(unittest.TestCase):
