@@ -15,7 +15,7 @@ SOURCE_AI, SOURCE_FAQ, SOURCE_GUARD = "ai", "faq", "guardrail"
 
 NO_KEY_NOTICE = (
     "The AI model is not configured, so I'm using the limited built-in FAQ instead. "
-    "An admin can enable the full assistant by adding an OpenAI API key to the Streamlit secrets."
+    "An admin can enable the full assistant by adding a Gemini API key (GEMINI_API_KEY) to the Streamlit secrets."
 )
 
 

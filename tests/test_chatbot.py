@@ -33,7 +33,21 @@ def ok_post(text="Hello from the model"):
     return post
 
 
-CONFIG = llm.LLMConfig(api_key="sk-test-secret", model="test-model")
+CONFIG = llm.LLMConfig(api_key="sk-test-secret", model="test-model", provider=llm.OPENAI)
+GEMINI_CONFIG = llm.LLMConfig(api_key="gem-test-secret", model="gemini-test", provider=llm.GEMINI)
+
+
+def gemini_post(text="Gemini answer", status=200, body=None):
+    calls = []
+
+    def post(url, headers=None, json=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        data = body if body is not None else {"candidates": [{"content": {"role": "model", "parts": [{"text": text}]},
+                                                               "finishReason": "STOP"}]}
+        return fake_response(status, data)
+
+    post.calls = calls
+    return post
 
 
 class TestSuggestedQuestions(unittest.TestCase):
@@ -116,21 +130,37 @@ class TestFaqFallback(unittest.TestCase):
 
 class TestMissingApiKey(unittest.TestCase):
     def test_no_secrets_means_not_configured(self):
-        self.assertIsNone(llm.config_from_secrets({}))
-        self.assertIsNone(llm.config_from_secrets({"openai": {"api_key": "  "}}))
+        self.assertIsNone(llm.config_from_secrets({}, env={}))
+        self.assertIsNone(llm.config_from_secrets({"openai": {"api_key": "  "}}, env={}))
 
-    def test_key_formats(self):
-        self.assertEqual(llm.config_from_secrets({"openai": {"api_key": "k", "model": "m"}}), llm.LLMConfig("k", "m"))
-        self.assertEqual(llm.config_from_secrets({"OPENAI_API_KEY": "k"}).model, llm.DEFAULT_MODEL)
+    def test_gemini_is_primary_and_read_from_secrets_or_environment(self):
+        cfg = llm.config_from_secrets({"GEMINI_API_KEY": "g", "GEMINI_MODEL": "gm"}, env={})
+        self.assertEqual((cfg.provider, cfg.api_key, cfg.model), (llm.GEMINI, "g", "gm"))
+        cfg = llm.config_from_secrets({}, env={"GEMINI_API_KEY": "e"})
+        self.assertEqual((cfg.provider, cfg.model), (llm.GEMINI, "gemini-2.5-flash"))
+        cfg = llm.config_from_secrets({"gemini": {"api_key": "s"}}, env={})
+        self.assertEqual((cfg.provider, cfg.api_key), (llm.GEMINI, "s"))
+
+    def test_gemini_wins_over_openai_and_openai_is_optional(self):
+        both = {"GEMINI_API_KEY": "g", "openai": {"api_key": "o"}}
+        self.assertEqual(llm.config_from_secrets(both, env={}).provider, llm.GEMINI)
+        self.assertEqual(llm.config_from_secrets({"openai": {"api_key": "k", "model": "m"}}, env={}),
+                         llm.LLMConfig("k", "m", llm.OPENAI))
+        self.assertEqual(llm.config_from_secrets({"OPENAI_API_KEY": "k"}, env={}).model, "gpt-4o-mini")
+
+    def test_blank_or_missing_env_is_not_configured(self):
+        self.assertIsNone(llm.config_from_secrets({}, env={"GEMINI_API_KEY": "  "}))
 
     def test_key_is_never_in_repr(self):
         self.assertNotIn("sk-test-secret", repr(CONFIG))
+        self.assertNotIn("gem-test-secret", repr(GEMINI_CONFIG))
 
     def test_answer_without_config_uses_faq_and_explains(self):
         post = ok_post()
         reply = service.answer("How many beds are available?", config=None, post=post)
         self.assertEqual(reply.source, service.SOURCE_FAQ)
         self.assertIn("not configured", reply.notice)
+        self.assertIn("GEMINI_API_KEY", reply.notice)
         self.assertEqual(post.calls, [])  # no network call without a key
 
 
@@ -166,6 +196,86 @@ class TestApiErrors(unittest.TestCase):
             raise RuntimeError("anything")
         reply = service.answer("How many beds are available?", config=CONFIG, post=post)
         self.assertEqual(reply.source, service.SOURCE_FAQ)
+
+
+class TestGeminiApi(unittest.TestCase):
+    def test_request_format(self):
+        post = gemini_post()
+        history = [{"role": "assistant", "content": "stray"}, {"role": "user", "content": "earlier"},
+                   {"role": "assistant", "content": "reply"}]
+        reply = service.answer("How many beds are available?", history, config=GEMINI_CONFIG, post=post)
+        self.assertEqual((reply.source, reply.text, reply.notice), (service.SOURCE_AI, "Gemini answer", ""))
+        call = post.calls[0]
+        self.assertEqual(call["url"], "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent")
+        self.assertNotIn("gem-test-secret", call["url"])  # the key is never placed in the URL
+        self.assertEqual(call["headers"]["x-goog-api-key"], "gem-test-secret")
+        self.assertEqual(call["timeout"], llm.TIMEOUT_SECONDS)
+        body = call["json"]
+        self.assertEqual([c["role"] for c in body["contents"]], ["user", "model", "user"])  # starts with a user turn
+        self.assertEqual(body["contents"][-1]["parts"], [{"text": "How many beds are available?"}])
+        system = body["systemInstruction"]["parts"][0]["text"]
+        self.assertIn("MediTwin AI", system)
+        self.assertIn(str(backend.current_state().value.available_beds), system)
+        self.assertEqual(body["generationConfig"]["maxOutputTokens"], llm.MAX_OUTPUT_TOKENS)
+        self.assertNotIn("system", [c["role"] for c in body["contents"]])
+        self.assertNotIn("gem-test-secret", json.dumps(body))
+
+    def test_response_parsing(self):
+        multi = {"candidates": [{"content": {"parts": [{"text": "Part one. "}, {"text": "Part two."}]}, "finishReason": "STOP"}]}
+        self.assertEqual(llm.parse_gemini(multi), "Part one. Part two.")
+        thought = {"candidates": [{"content": {"parts": [{"text": "hidden", "thought": True}, {"text": "Shown"}]}}]}
+        self.assertEqual(llm.parse_gemini(thought), "Shown")
+        cut = {"candidates": [{"content": {"parts": [{"text": "Partial"}]}, "finishReason": "MAX_TOKENS"}]}
+        self.assertIn("cut short", llm.parse_gemini(cut))
+
+    def test_blocked_empty_and_malformed_responses(self):
+        for data, expect in (
+            ({"promptFeedback": {"blockReason": "SAFETY"}}, "declined"),
+            ({"candidates": [{"finishReason": "SAFETY"}]}, "declined"),
+            ({"candidates": [{"finishReason": "MAX_TOKENS", "content": {"parts": []}}]}, "ran out"),
+            ({"candidates": [{"content": {"parts": []}, "finishReason": "STOP"}]}, "empty"),
+            ({}, "unexpected"), ([], "unexpected"),
+        ):
+            with self.assertRaises(llm.LLMError, msg=str(data)) as cm:
+                llm.parse_gemini(data)
+            self.assertIn(expect, str(cm.exception))
+
+    def test_http_errors_fall_back_to_the_faq(self):
+        cases = ((401, None, "rejected"), (403, None, "rejected"), (404, None, "not found"), (429, None, "rate-limited"),
+                 (400, {"error": {"message": "API key not valid. Please pass a valid API key."}}, "rejected"),
+                 (400, {"error": {"message": "bad field"}}, "HTTP 400"), (500, None, "HTTP 500"), (503, None, "HTTP 503"))
+        for status, body, expect in cases:
+            reply = service.answer("How many beds are available?", config=GEMINI_CONFIG,
+                                   post=gemini_post(status=status, body=body or {}))
+            self.assertEqual(reply.source, service.SOURCE_FAQ, status)
+            self.assertIn(expect, reply.notice)
+            self.assertIn("not generative AI", reply.text)
+            self.assertNotIn("gem-test-secret", reply.notice + reply.text)
+
+    def test_timeout_connection_and_unexpected_errors_never_leak_the_key(self):
+        for exc, expect in ((requests.Timeout("gem-test-secret"), "too long"),
+                            (requests.ConnectionError("https://x?key=gem-test-secret"), "Could not reach"),
+                            (RuntimeError("boom"), "Something went wrong")):
+            def post(*a, **k):
+                raise exc
+            reply = service.answer("How many beds are available?", config=GEMINI_CONFIG, post=post)
+            self.assertEqual(reply.source, service.SOURCE_FAQ)
+            self.assertIn(expect, reply.notice)
+            self.assertNotIn("gem-test-secret", reply.notice + reply.text)
+
+    def test_non_json_success_body(self):
+        def post(*a, **k):
+            r = SimpleNamespace(status_code=200)
+            r.json = lambda: (_ for _ in ()).throw(ValueError("not json"))
+            return r
+        reply = service.answer("How many beds are available?", config=GEMINI_CONFIG, post=post)
+        self.assertIn("unexpected response", reply.notice)
+
+    def test_guardrails_block_before_any_gemini_call(self):
+        post = gemini_post()
+        reply = service.answer("Prescribe something for this patient", config=GEMINI_CONFIG, post=post)
+        self.assertEqual(reply.source, service.SOURCE_GUARD)
+        self.assertEqual(post.calls, [])
 
 
 class TestLlmRequest(unittest.TestCase):
@@ -218,6 +328,13 @@ class TestGuardrails(unittest.TestCase):
 
 
 class TestPage(unittest.TestCase):
+    def setUp(self):  # never let a developer's real key trigger a live API call from the page tests
+        from unittest import mock
+
+        patcher = mock.patch.object(llm, "config_from_secrets", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _app(self):
         from streamlit.testing.v1 import AppTest
 

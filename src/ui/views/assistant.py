@@ -35,10 +35,10 @@ _CSS = f"""
 SETUP_HELP = """Add this to `.streamlit/secrets.toml` locally, or to **App settings → Secrets** on Streamlit Community Cloud:
 
 ```toml
-[openai]
-api_key = "sk-..."
-model = "gpt-4o-mini"   # optional
-```"""
+GEMINI_API_KEY = "your-key"
+GEMINI_MODEL = "gemini-2.5-flash"   # optional
+```
+OpenAI remains an optional alternative (`[openai] api_key = "sk-..."`), used only if no Gemini key is set."""
 
 
 def _ask(question: str) -> None:
@@ -78,7 +78,7 @@ def render() -> None:
 
     with st.container(key="assistant-page"):
         if config:
-            st.markdown(f'<span class="mt-ai-mode">AI model: {config.model} · answers use live MediTwin values</span>',
+            st.markdown(f'<span class="mt-ai-mode">AI model: {config.provider_label} · {config.model} · answers use live MediTwin values</span>',
                         unsafe_allow_html=True)
         else:
             st.markdown('<span class="mt-ai-mode faq">AI model not configured · limited FAQ mode</span>',
